@@ -1,1 +1,838 @@
-# CPcard
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sakura Greeting</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-color: #4a4a4a;
+            --accent-color: #ffb7b2;
+            --primary-font: 'Noto Serif SC', 'Georgia', serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--primary-font);
+            background: linear-gradient(to bottom, #fce4ec, #e8daef, #3f2b96); /* Sakura to Dusk */
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        #app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+            perspective: 1000px;
+        }
+
+        .card {
+            width: 90%;
+            max-width: 600px;
+            min-height: 400px;
+            padding: 40px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.1s ease-out, box-shadow 0.3s ease, opacity 1.5s ease; /* Added opacity transition */
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .text-container {
+            font-size: 1.5rem;
+            line-height: 1.8;
+            color: #2d2d2d;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background-color: #333;
+            margin-left: 5px;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .music-control {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            z-index: 10;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .music-control:hover {
+            opacity: 1;
+        }
+
+        .music-icon {
+            width: 100%;
+            height: 100%;
+            fill: #fff;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .music-icon.playing {
+            animation: spin 3s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .hint {
+            position: absolute;
+            bottom: 20px;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 1px;
+            animation: fadeInOut 3s infinite;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* Train Finale Styles */
+        #finale-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none; /* Hidden by default */
+            z-index: 2;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #finale-container.visible {
+            opacity: 1;
+        }
+
+        .train-wrapper {
+            position: absolute;
+            bottom: 30%; /* Adjust vertical position */
+            left: -100%; /* Start off-screen left */
+            /* Increase width to accommodate locomotive + carriages */
+            width: 800px; 
+            height: 120px;
+            /* Animation will be triggered by JS */
+        }
+
+        .train-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 5px; /* Spacing between carriages */
+            width: 100%;
+            height: 100%;
+            flex-direction: row-reverse; /* Locomotive at the front (right side) */
+        }
+
+        /* --- Locomotive --- */
+        .locomotive {
+            position: relative;
+            width: 140px;
+            height: 100px;
+            z-index: 2;
+        }
+
+        .chimney {
+            position: absolute;
+            top: 0;
+            right: 20px;
+            width: 20px;
+            height: 30px;
+            background: #ffc1cc;
+            border: 2px solid #fff;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .chimney::before {
+             content: '';
+             position: absolute;
+             top: -5px;
+             left: -5px;
+             width: 30px;
+             height: 8px;
+             background: #ffc1cc;
+             border: 2px solid #fff;
+             border-radius: 4px;
+        }
+
+        .boiler {
+            position: absolute;
+            bottom: 20px;
+            right: 0;
+            width: 90px;
+            height: 50px;
+            background: #ffc1cc;
+            border: 2px solid #fff;
+            border-radius: 0 25px 25px 0;
+            z-index: 1;
+        }
+
+        .cab {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 50px;
+            height: 70px;
+            background: #ffc1cc;
+            border: 2px solid #fff;
+            border-radius: 10px 10px 0 0;
+            z-index: 2;
+        }
+
+        .cab-window {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 25px;
+            background: #e8daef;
+            border: 2px solid #fff;
+            border-radius: 4px;
+        }
+        
+        .cowcatcher {
+             position: absolute;
+             bottom: 20px;
+             right: -10px;
+             width: 20px;
+             height: 20px;
+             background: #ffc1cc;
+             border: 2px solid #fff;
+             clip-path: polygon(0 0, 100% 100%, 0 100%);
+        }
+
+        .loco-wheels {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 30px;
+        }
+
+        .big-wheel {
+            position: absolute;
+            bottom: 0;
+            left: 55px;
+            width: 40px;
+            height: 40px;
+            background: #555;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            animation: wheelSpin 0.5s linear infinite;
+            z-index: 3;
+        }
+
+        .small-wheel {
+            position: absolute;
+            bottom: 0;
+            right: 10px;
+            width: 25px;
+            height: 25px;
+            background: #555;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            animation: wheelSpin 0.5s linear infinite;
+        }
+        
+        .small-wheel.rear {
+            right: auto;
+            left: 10px;
+        }
+
+        /* --- Carriage --- */
+        .carriage {
+            position: relative;
+            width: 110px;
+            height: 80px;
+        }
+
+        .carriage-body {
+            position: absolute;
+            bottom: 15px;
+            width: 100%;
+            height: 55px;
+            background: #ffc1cc;
+            border: 2px solid #fff;
+            border-radius: 8px;
+        }
+
+        .carriage-window {
+            position: absolute;
+            top: 10px;
+            width: 25px;
+            height: 20px;
+            background: #e8daef;
+            border: 2px solid #fff;
+            border-radius: 4px;
+        }
+
+        .cw1 { left: 10px; }
+        .cw2 { left: 42px; }
+        .cw3 { right: 10px; }
+
+        .carriage-wheels {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 25px;
+        }
+        
+        .c-wheel {
+            position: absolute;
+            bottom: 0;
+            width: 25px;
+            height: 25px;
+            background: #555;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            animation: wheelSpin 0.5s linear infinite;
+        }
+        
+        .c-wheel.left { left: 15px; }
+        .c-wheel.right { right: 15px; }
+        
+        .connector {
+            width: 10px;
+            height: 6px;
+            background: #fff;
+            margin-bottom: 25px; /* Align with chassis */
+        }
+
+        /* --- Steam --- */
+        .steam-container {
+            position: absolute;
+            top: -40px;
+            right: 20px; /* Near chimney */
+            width: 50px;
+            height: 100px;
+            pointer-events: none;
+        }
+        
+        .steam {
+            position: absolute;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: steamRise 1.5s ease-out infinite;
+            opacity: 0;
+        }
+        
+        .s1 { width: 15px; height: 15px; left: 10px; animation-delay: 0s; }
+        .s2 { width: 25px; height: 25px; left: 0px; animation-delay: 0.5s; }
+        .s3 { width: 20px; height: 20px; left: 15px; animation-delay: 1s; }
+        
+        @keyframes steamRise {
+            0% { transform: translateY(0) scale(1); opacity: 0.8; }
+            100% { transform: translateY(-60px) scale(2); opacity: 0; }
+        }
+
+        @keyframes wheelSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .final-text {
+            font-size: 2rem;
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(255, 105, 180, 0.8);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1s ease;
+            text-align: center;
+            margin-top: -50px; /* Adjust relative to train */
+        }
+
+        .final-text.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @keyframes trainMove {
+            0% { left: -100%; transform: translateX(0); }
+            100% { left: 100%; transform: translateX(100vw); }
+        }
+        
+        /* Speed lines effect */
+        .speed-line {
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            height: 2px;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                width: 85%;
+                padding: 30px 20px;
+                min-height: 350px;
+            }
+            .text-container {
+                font-size: 1.2rem;
+            }
+            .train-wrapper {
+                 /* Scale down on mobile */
+                 transform: scale(0.6);
+                 transform-origin: bottom center;
+            }
+            .final-text {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas-container"></canvas>
+
+<div id="app">
+    <div class="card" id="glass-card">
+        <div class="music-control" id="music-btn">
+            <!-- Simple Record/Note SVG -->
+            <svg class="music-icon" viewBox="0 0 24 24" id="music-svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
+                <path d="M0 0h24v24H0z" fill="none"/>
+            </svg>
+        </div>
+        
+        <div class="text-container">
+            <span id="typing-text"></span><span class="cursor"></span>
+        </div>
+
+        <div class="hint">点击开启花季 · 长按起风</div>
+    </div>
+
+    <!-- Finale Container -->
+    <div id="finale-container">
+        <div class="train-wrapper" id="train">
+            <div class="train-container">
+                <!-- Steam -->
+                <div class="steam-container">
+                    <div class="steam s1"></div>
+                    <div class="steam s2"></div>
+                    <div class="steam s3"></div>
+                </div>
+
+                <!-- Locomotive -->
+                <div class="locomotive">
+                    <div class="chimney"></div>
+                    <div class="boiler"></div>
+                    <div class="cab">
+                        <div class="cab-window"></div>
+                    </div>
+                    <div class="cowcatcher"></div>
+                    <div class="loco-wheels">
+                        <div class="small-wheel rear"></div>
+                        <div class="big-wheel"></div>
+                        <div class="small-wheel"></div>
+                    </div>
+                </div>
+
+                <!-- Connector -->
+                <div class="connector"></div>
+
+                <!-- Carriage 1 -->
+                <div class="carriage">
+                    <div class="carriage-body">
+                        <div class="carriage-window cw1"></div>
+                        <div class="carriage-window cw2"></div>
+                        <div class="carriage-window cw3"></div>
+                    </div>
+                    <div class="carriage-wheels">
+                        <div class="c-wheel left"></div>
+                        <div class="c-wheel right"></div>
+                    </div>
+                </div>
+
+                <!-- Connector -->
+                <div class="connector"></div>
+
+                <!-- Carriage 2 -->
+                <div class="carriage">
+                    <div class="carriage-body">
+                        <div class="carriage-window cw1"></div>
+                        <div class="carriage-window cw2"></div>
+                        <div class="carriage-window cw3"></div>
+                    </div>
+                    <div class="carriage-wheels">
+                        <div class="c-wheel left"></div>
+                        <div class="c-wheel right"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="final-text" id="final-text">
+            一起做任务刷满里程吧
+        </div>
+    </div>
+</div>
+
+<!-- Royalty-free piano music placeholder. Replace with your preferred URL. -->
+<audio id="bgm" loop>
+    <source src="https://www.kumeiwp.com/wj/143790/2023/04/03/8a78b06fc13add800e7068ea8f0448f4.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+</audio>
+
+<script>
+    /**
+     * Configuration
+     */
+    const CONFIG = {
+        recipientName: "怡嘉", // [在此处修改对方昵称]
+        typingSpeed: 100,
+        eraseSpeed: 50,
+        delayBetweenLines: 2000,
+        sakuraCount: 100,
+        windForce: 0, // Base wind
+        gravity: 0.5
+    };
+
+    /**
+     * Text Content
+     */
+    const messages = [
+        `在这茫茫人海，能与你相遇，\n本身就是一种极小的概率。`,
+        `很有缘分，不是吗？`,
+        `很高兴能和你度过这段愉快时光。`,
+        `在这个快节奏的世界里，\n希望能和你成为很好的朋友。`,
+        `哪怕只是一周，\n也想送你一场永不凋谢的花季。`
+    ];
+
+    /**
+     * Canvas & Sakura Logic
+     */
+    const canvas = document.getElementById('canvas-container');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let sakuras = [];
+    let animationFrame;
+    let isLongPress = false;
+    let mouseX = 0;
+    let mouseY = 0;
+    let isGathering = false;
+
+    // Resize handling
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Sakura Class
+    class Sakura {
+        constructor() {
+            this.reset(true);
+        }
+
+        reset(initial = false) {
+            this.x = Math.random() * width;
+            this.y = initial ? Math.random() * height : -50;
+            this.size = Math.random() * 15 + 10; // 10-25px
+            this.speedX = Math.random() * 1 - 0.5;
+            this.speedY = Math.random() * 1 + 1;
+            this.rotation = Math.random() * 360;
+            this.rotationSpeed = Math.random() * 2 - 1;
+            this.sway = 0;
+            this.swaySpeed = Math.random() * 0.05 + 0.01;
+            this.opacity = Math.random() * 0.5 + 0.5;
+            this.petalType = Math.floor(Math.random() * 2); // 0 or 1 for slight variation
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation * Math.PI / 180);
+            ctx.globalAlpha = this.opacity;
+            ctx.fillStyle = '#ffc1cc'; // Sakura pink
+            
+            // Draw petal
+            ctx.beginPath();
+            if (this.petalType === 0) {
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(10, -10, 15, -5, 0, 15);
+                ctx.bezierCurveTo(-15, -5, -10, -10, 0, 0);
+            } else {
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(5, -5, 10, 0, 0, 10);
+                ctx.bezierCurveTo(-10, 0, -5, -5, 0, 0);
+            }
+            ctx.fill();
+            ctx.restore();
+        }
+
+        update() {
+            // Wind effect
+            const windMultiplier = isLongPress ? 5 : 1;
+            const gatherFactor = isGathering ? 0.05 : 0;
+
+            if (isGathering) {
+                // Move towards center/mouse
+                const dx = (mouseX || width/2) - this.x;
+                const dy = (mouseY || height/2) - this.y;
+                this.x += dx * gatherFactor;
+                this.y += dy * gatherFactor;
+            } else {
+                // Normal fall
+                this.sway += this.swaySpeed * windMultiplier;
+                this.x += Math.sin(this.sway) * 2 + this.speedX * windMultiplier;
+                this.y += this.speedY * windMultiplier;
+                this.rotation += this.rotationSpeed * windMultiplier;
+            }
+
+            // Boundary check
+            if (this.y > height + 50 || this.x < -50 || this.x > width + 50) {
+                if (!isGathering) this.reset();
+            }
+        }
+    }
+
+    function initSakura() {
+        sakuras = [];
+        for (let i = 0; i < CONFIG.sakuraCount; i++) {
+            sakuras.push(new Sakura());
+        }
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+        sakuras.forEach(sakura => sakura.draw());
+        sakuras.forEach(sakura => sakura.update());
+        animationFrame = requestAnimationFrame(animate);
+    }
+
+    initSakura();
+    animate();
+
+    /**
+     * Text Typing Logic
+     */
+    const textElement = document.getElementById('typing-text');
+    let messageIndex = 0;
+    let charIndex = 0;
+    let isDeleting = false;
+
+    function typeWriter() {
+        const currentMessage = messages[messageIndex];
+        
+        if (isDeleting) {
+            textElement.innerHTML = currentMessage.substring(0, charIndex - 1).replace(/\n/g, '<br>');
+            charIndex--;
+        } else {
+            textElement.innerHTML = currentMessage.substring(0, charIndex + 1).replace(/\n/g, '<br>');
+            charIndex++;
+        }
+
+        let typeSpeed = CONFIG.typingSpeed;
+
+        if (!isDeleting && charIndex === currentMessage.length) {
+            // Finished typing line
+            typeSpeed = CONFIG.delayBetweenLines;
+            isDeleting = true;
+
+            // Check if this was the last message
+            if (messageIndex === messages.length - 1) {
+                isDeleting = false; // Don't delete the last one
+                setTimeout(startFinale, 2000); // Trigger finale after delay
+                return; // Stop the loop
+            }
+
+        } else if (isDeleting && charIndex === 0) {
+            // Finished deleting line
+            isDeleting = false;
+            messageIndex = (messageIndex + 1) % messages.length;
+            typeSpeed = 500;
+        } else if (isDeleting) {
+            typeSpeed = CONFIG.eraseSpeed;
+        }
+
+        setTimeout(typeWriter, typeSpeed);
+    }
+
+    // Start typing after a short delay
+    setTimeout(typeWriter, 1000);
+
+    // Finale Sequence
+    function startFinale() {
+        const glassCard = document.getElementById('glass-card');
+        const finaleContainer = document.getElementById('finale-container');
+        const train = document.getElementById('train');
+        const finalText = document.getElementById('final-text');
+
+        // 1. Fade out card
+        glassCard.classList.add('hidden');
+
+        // 2. Show finale container
+        setTimeout(() => {
+            finaleContainer.style.display = 'flex';
+            // Force reflow
+            void finaleContainer.offsetWidth;
+            finaleContainer.classList.add('visible');
+
+            // 3. Animate Train
+            setTimeout(() => {
+                train.style.animation = 'trainMove 8s linear forwards';
+            }, 500);
+
+            // 4. Show Final Text
+            setTimeout(() => {
+                finalText.classList.add('show');
+            }, 3500); // Appear when train is halfway
+
+            // Optional: Increase sakura speed for effect
+            CONFIG.gravity = 1.5;
+            CONFIG.windForce = 2;
+
+        }, 1500);
+    }
+
+    /**
+     * Interactions & Audio
+     */
+    const bgm = document.getElementById('bgm');
+    const musicBtn = document.getElementById('music-btn');
+    const musicIcon = document.getElementById('music-svg');
+    const glassCard = document.getElementById('glass-card');
+    let isPlaying = false;
+
+    function toggleMusic() {
+        if (isPlaying) {
+            bgm.pause();
+            musicIcon.classList.remove('playing');
+        } else {
+            bgm.play().catch(e => console.log("Audio play failed:", e));
+            musicIcon.classList.add('playing');
+        }
+        isPlaying = !isPlaying;
+    }
+
+    musicBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMusic();
+    });
+
+    // Global click interaction
+    document.addEventListener('click', (e) => {
+        // Play music on first interaction if not playing
+        if (!isPlaying) {
+            toggleMusic();
+        }
+        
+        // Trigger gather effect
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        isGathering = true;
+        setTimeout(() => {
+            isGathering = false;
+        }, 1000);
+    });
+
+    // Long press (Touch/Mouse)
+    let pressTimer;
+
+    const startPress = () => {
+        isLongPress = true;
+    };
+    
+    const endPress = () => {
+        isLongPress = false;
+    };
+
+    document.addEventListener('mousedown', startPress);
+    document.addEventListener('mouseup', endPress);
+    document.addEventListener('touchstart', startPress);
+    document.addEventListener('touchend', endPress);
+
+    // Parallax Effect
+    document.addEventListener('mousemove', (e) => {
+        const x = (window.innerWidth - e.pageX * 2) / 100;
+        const y = (window.innerHeight - e.pageY * 2) / 100;
+        glassCard.style.transform = `translate(${x}px, ${y}px)`;
+    });
+
+    // Mobile gyroscope parallax (optional, if supported)
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (e) => {
+            const x = e.gamma / 5; // Tilt L/R
+            const y = e.beta / 5;  // Tilt F/B
+            glassCard.style.transform = `translate(${x}px, ${y}px)`;
+        });
+    }
+
+</script>
+</body>
+</html>
